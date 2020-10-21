@@ -1,32 +1,33 @@
 from tkinter import *
 from tkinter.ttk import OptionMenu
-from functools import partial
+from tkinter.filedialog import asksaveasfilename, askopenfile
+import json
 
-size_x = 15
-size_y = 10
-box_px = 35
+size_x = 20
+size_y = 20
+box_px = 30
 wall_px = 8
 
 inf = float('inf')
 
 
-def manhatan(x, y):
-    return (size_x - x) + (size_y - y)
+def manhatan(x, y, mul):
+    return ((size_x - x) + (size_y - y)) * mul
 
 
-def eucledean(x, y):
-    return ((size_x - x) ** 2 + (size_y - y) ** 2) ** 0.5
+def eucledean(x, y, mul):
+    return (((size_x - x) ** 2 + (size_y - y) ** 2) ** 0.5) * mul
 
 
 class Node():
-    def __init__(self, x, y):
+    def __init__(self, x, y, h_func='eucledean', mul=1):
         self.visited = False
         self.x = x
         self.y = y
         self.g = inf
 
         self.h = 0
-        self.set_h_func('eucledean')
+        self.set_h_func(h_func, mul)
 
         self.prev = None
         self.path = False
@@ -35,9 +36,9 @@ class Node():
     def f(self):
         return self.g + self.h
 
-    def set_h_func(self, h_func):
-        if h_func == 'manhatan': self.h = manhatan(self.x, self.y)
-        if h_func == 'eucledean': self.h = eucledean(self.x, self.y)
+    def set_h_func(self, h_func, mul):
+        if h_func == 'manhatan': self.h = manhatan(self.x, self.y, mul)
+        if h_func == 'eucledean': self.h = eucledean(self.x, self.y, mul)
 
     def __str__(self):
         return '[' + str(self.x) + ',' + str(self.y) + '] g=' + str(self.g) + ' h=' + str(self.h) + ' f=' + str(
@@ -49,25 +50,47 @@ class App(Tk):
         super().__init__(*args, **kwargs)
 
         # Window settings
-        self.minsize(width=1100, height=700)
-        self.maxsize(width=1100, height=700)
+        self.minsize(width=1050, height=800)
+        self.maxsize(width=1050, height=800)
         self.resizable(width=False, height=False)
         self.protocol("WM_DELETE_WINDOW", self.quit)
         self.title("Labyrinth Solver - by Frank Fourlas")
 
-        # Labyrinth
-        self.reset_maze()
-
         # Sidebar
         sidebar = Frame(self, bg='grey')
+
         Button(sidebar, text='Run Algorithm', command=self.run_algorithm, height=2, font=25).pack(side=TOP, padx=10,
                                                                                                   pady=10)
         self.h_func = StringVar()
-        self.h_func.trace_add('write', self.change_h_func)
+        self.h_func.set('eucledean')
         OptionMenu(sidebar, self.h_func, 'eucledean', *['eucledean', 'manhatan']).pack(side=TOP, padx=10, pady=10)
-        Button(sidebar, text='Reset Maze', command=self.reset_maze, height=2, font=25).pack(side=TOP, padx=10,
-                                                                                                  pady=10)
+
+        Button(sidebar, text='Reset Maze', command=self.reset_maze, height=2, font=25).pack(side=TOP, padx=10, pady=10)
+
+        Button(sidebar, text='Save Maze', command=self.save_maze, height=2, font=25).pack(side=TOP, padx=10, pady=10)
+        Button(sidebar, text='Load Maze', command=self.load_maze, height=2, font=25).pack(side=TOP, padx=10, pady=10)
+
+        self.display_weights = BooleanVar()
+        self.display_weights.set(1)
+        Checkbutton(sidebar, text='Display Weights', variable=self.display_weights).pack(side=TOP, padx=10, pady=10)
+
+        multiplier = Frame(sidebar)
+        Label(multiplier, text='h Function multiplier').pack(side=TOP, padx=10, pady=2)
+        radio = Frame(multiplier)
+        self.h_mul = DoubleVar()
+        self.h_mul.set(1)
+        Radiobutton(radio, text='1/4', variable=self.h_mul, value=0.25).pack(side=LEFT, padx=2, pady=5)
+        Radiobutton(radio, text='1/2', variable=self.h_mul, value=0.5).pack(side=LEFT, padx=2, pady=5)
+        Radiobutton(radio, text='1', variable=self.h_mul, value=1).pack(side=LEFT, padx=2, pady=5)
+        Radiobutton(radio, text='3', variable=self.h_mul, value=3).pack(side=LEFT, padx=2, pady=5)
+        Radiobutton(radio, text='15', variable=self.h_mul, value=15).pack(side=LEFT, padx=2, pady=5)
+        radio.pack(side=TOP, padx=2, pady=2)
+        multiplier.pack(side=TOP, padx=10, pady=10)
+
         sidebar.pack(side=LEFT, fill=Y)
+
+        # Labyrinth
+        self.reset_maze()
 
         # Canvas
         self.canvas = Canvas(self, bg='#a0ff8f')
@@ -78,14 +101,26 @@ class App(Tk):
         self.RUNNING = True
         self.ALGORITHM = False
 
+    def save_maze(self):
+        filename = asksaveasfilename(defaultextension='.json', title="Save Maze As...", filetypes=(('JSON Files', '*.json'),))
+        with open(filename, 'w', encoding='utf-8') as file:
+            json.dump({'v_walls': self.v_walls, 'h_walls': self.h_walls}, file)
+
+    def load_maze(self):
+        with askopenfile(mode='r', filetypes=(('JSON Files', '*.json'),)) as file:
+            data = json.load(file)
+            self.v_walls = data['v_walls']
+            self.h_walls = data['h_walls']
+
     def reset_maze(self):
-        self.nodes = [[Node(i, j) for j in range(size_y)] for i in range(size_x)]
-        self.nodes[0][0].g = 0
+        self.soft_reset()
         self.v_walls = [[False for j in range(size_y)] for i in range(size_x - 1)]
         self.h_walls = [[False for j in range(size_y - 1)] for i in range(size_x)]
 
     def soft_reset(self):
-        self.nodes = [[Node(i, j) for j in range(size_y)] for i in range(size_x)]
+        h_func = self.h_func.get()
+        h_mul = self.h_mul.get()
+        self.nodes = [[Node(i, j, h_func, h_mul) for j in range(size_y)] for i in range(size_x)]
         self.nodes[0][0].g = 0
 
     def canvas_click(self, event):
@@ -116,12 +151,6 @@ class App(Tk):
         temp = [min(i, key=lambda n: (n.f() if not n.visited else inf)) for i in self.nodes]
         return min(temp, key=lambda n: (n.f() if not n.visited else inf))
 
-    def change_h_func(self, var, indx, mode):
-        h_func = self.h_func.get()
-        for i in self.nodes:
-            for j in i:
-                j.set_h_func(h_func)
-
     def update_canvas(self):
         self.canvas.delete(ALL)
 
@@ -134,6 +163,7 @@ class App(Tk):
         self.canvas.create_line(0, maxy-wall_px/2, maxx, maxy-wall_px/2, width=wall_px, fill='black')
 
         # Print squares
+        weights = self.display_weights.get()
         for i in range(size_x):
             for j in range(size_y):
                 if i == j == 0 or (i == size_x - 1 and j == size_y - 1) or self.nodes[i][j].path: col = 'blue'
@@ -147,6 +177,9 @@ class App(Tk):
                 x1 = (i + 1) * (wall_px + box_px)
                 y1 = (j + 1) * (wall_px + box_px)
                 self.canvas.create_rectangle(x0, y0, x1, y1, fill=col)
+                if weights and self.nodes[i][j].f() != float('inf'):
+                    self.canvas.create_text(x0+4, y0+5, text='{:.4}'.format(str(self.nodes[i][j].f())), anchor=NW,
+                                            font='Arial 10 bold', fill='black')
 
         # Print vertical walls
         for i, row in enumerate(self.v_walls):
@@ -178,7 +211,7 @@ class App(Tk):
             # ==================== A* Algorithm ====================
             cur = self.next_node()
             if self.ALGORITHM:
-                print(cur)
+                # print(cur)
                 cur.visited = True
 
                 # Calculate Top
@@ -213,7 +246,7 @@ class App(Tk):
                     while cur.g != 0:
                         cur.path = True
                         cur = cur.prev
-                input()
+                # input()
             # ======================================================
 
             self.update_canvas()
