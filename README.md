@@ -1,9 +1,11 @@
 # labyrinth_solver
 
 ## A* Algorithm
-This program is contains an implemetation of the A* algorithm focused on solving 2D mazes. The algorithm is wraped arround a nice GUI with some customization features.
+This program contains an implemetation of the A* algorithm focused on solving 2D mazes. The algorithm is wraped arround a nice GUI with some customization features.
 
 > For reference the f value of a node in A* is `f=g+h` where: g is the until-then true distance of a node from the start, h is the estimated (based on an h-function) distance of a box to the end node.
+
+![A screenshot of the program being used](screenshot.JPG)
 
 ## How to use
 No requirements. Just a plain Python3 installation!
